@@ -16,6 +16,8 @@ final class LoaderImageService: ILoaderImageService {
     func loadImages(from urls: [URL], completion: @escaping ([UIImage?]) -> Void) {
         var images = Array<UIImage?>(repeating: nil, count: urls.count)
         let group = DispatchGroup()
+        let queue = DispatchQueue(label: "imageQueue")
+        
         let configuration = URLSessionConfiguration.default
         configuration.httpMaximumConnectionsPerHost = 6
         let session = URLSession(configuration: configuration)
@@ -27,7 +29,11 @@ final class LoaderImageService: ILoaderImageService {
                 
                 guard let data, let image = UIImage(data: data) else { return }
                 
-                images[index] = self.modifyImage(image)
+                let modified = self.modifyImage(image)
+                
+                queue.async {
+                    images[index] = modified
+                }
             }.resume()
         }
 
