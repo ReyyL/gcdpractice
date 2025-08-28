@@ -16,6 +16,7 @@ final class LoaderImageService: ILoaderImageService {
     
     private let session: URLSession
     private var tasks: [URL: URLSessionDataTask] = [:]
+    private let tasksQueue = DispatchQueue(label: "tasksQueue", attributes: .concurrent)
     
     private let cache = NSCache<NSURL, UIImage>()
     
@@ -31,12 +32,16 @@ final class LoaderImageService: ILoaderImageService {
             return
         }
         
-        if tasks[url] != nil {
-            return
+        tasksQueue.sync {
+            if tasks[url] != nil { return }
         }
         
-        let task = session.dataTask(with: url) { data, _, _ in
-            defer { self.tasks.removeValue(forKey: url) }
+        let task = session.dataTask(with: url) { [weak self] data, _, _ in
+            guard let self else { return }
+            
+            tasksQueue.async(flags: .barrier) {
+                self.tasks.removeValue(forKey: url)
+            }
             
             guard let data, let image = UIImage(data: data) else {
                 DispatchQueue.main.async {
@@ -50,7 +55,7 @@ final class LoaderImageService: ILoaderImageService {
                 let mono = self.convertToMono(resized)
                 
                 if let mono {
-                    self.cache.setObject(mono, forKey: url as NSURL, cost: mono.cacheCost)
+                    self.cache.setObject(mono, forKey: url as NSURL)
                 }
                 
                 DispatchQueue.main.async {
@@ -58,13 +63,18 @@ final class LoaderImageService: ILoaderImageService {
                 }
             }
         }
-        tasks[url] = task
+        
+        tasksQueue.async(flags: .barrier) {
+            self.tasks[url] = task
+        }
         task.resume()
     }
     
     func cancelLoad(for url: URL) {
-        tasks[url]?.cancel()
-        tasks.removeValue(forKey: url)
+        tasksQueue.async(flags: .barrier) {
+            self.tasks[url]?.cancel()
+            self.tasks.removeValue(forKey: url)
+        }
     }
     
     private func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage {
@@ -86,13 +96,5 @@ final class LoaderImageService: ILoaderImageService {
         guard let cgImage = context.createCGImage(output, from: output.extent) else { return nil }
 
         return UIImage(cgImage: cgImage)
-    }
-}
-
-private extension UIImage {
-    var cacheCost: Int {
-        guard let cgImage else { return 0 }
-        
-        return cgImage.bytesPerRow * cgImage.height
     }
 }

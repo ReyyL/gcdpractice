@@ -38,13 +38,6 @@ class ViewController: UIViewController, IImagesView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        
-        let visibleIndexes = collectionView.indexPathsForVisibleItems.map { $0.item }
-        presenter.loadImages(at: visibleIndexes)
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -93,10 +86,19 @@ class ViewController: UIViewController, IImagesView {
 
         dataSource = UICollectionViewDiffableDataSource<Int, Int>(collectionView: collectionView) { collectionView, indexPath, index in
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ImageCell", for: indexPath) as! ImageCell
-            if let img = self.images[index] {
+            
+            if let img = self.presenter.image(at: index) {
                 cell.configure(with: img)
             } else {
                 cell.configurePlaceholder()
+                self.presenter.loadImage(for: index) { [weak self, weak cell] image in
+                    guard let self, let cell else { return }
+                    
+                    DispatchQueue.main.async {
+                        cell.configure(with: image ?? UIImage())
+                        self.images[index] = image
+                    }
+                }
             }
             return cell
         }

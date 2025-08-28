@@ -15,6 +15,12 @@ final class ImageCell: UICollectionViewCell {
         setupImageView()
     }
     
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        imageView.image = nil
+        imageView.backgroundColor = .secondarySystemBackground
+    }
+    
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
@@ -36,6 +42,7 @@ final class ImageCell: UICollectionViewCell {
     
     func configure(with image: UIImage) {
         imageView.image = image
+        imageView.backgroundColor = .clear
     }
     
     func configurePlaceholder() {
